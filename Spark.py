@@ -206,3 +206,188 @@ empresas\
   .select(['razao_social_nome_empresarial', 'natureza_juridica', 'porte_da_empresa', 'capital_social_da_empresa'])\
   .where(f.upper(empresas['razao_social_nome_empresarial']).like('%RESTAURANTE%'))\
   .show(truncate = False)
+
+socios\
+  .select(f.year('data_de_entrada_sociedade').alias('ano_de_entrada'))\
+  .where('ano_de_entrada >= 2010')\
+  .groupBy('ano_de_entrada')\
+  .count()\
+  .orderBy('ano_de_entrada', ascending = True)\
+  .show()
+
+empresas\
+  .select('cnpj_basico', 'porte_da_empresa', 'capital_social_da_empresa')\
+  .groupBy('porte_da_empresa')\
+  .agg(
+      f.avg('capital_social_da_empresa').alias('capital_social_medio'),
+      f.count('cnpj_basico').alias('frequencia')
+
+  )\
+  .orderBy('porte_da_empresa', ascending = True)\
+  .show()
+
+empresas\
+  .select('capital_social_da_empresa')\
+  .summary()\
+  .show()
+
+produtos = spark.createDataFrame([
+        ('1', 'Bebidas', 'Água mineral'),
+        ('2', 'Limpeza', 'Sabão em pó'),
+        ('3', 'Frios', 'Queijo'),
+        ('4', 'Bebidas', 'Refrigerante'),
+        ('5', 'Pet', 'Ração para cães')
+    ],
+    ['id', 'cat', 'prod'])
+
+produtos.toPandas()
+
+impostos = spark.createDataFrame( [
+        ('Bebidas', 0.15),
+        ('Limpeza', 0.05),
+        ('Frios', 0.065),
+        ('Carnes', 0.08)
+    ],
+    ['cat', 'tax'])
+
+impostos.toPandas()
+
+produtos.join(impostos, 'cat', how = 'inner')\
+.sort('id')\
+.show()
+
+produtos.join(impostos, 'cat', how = 'left')\
+.sort('id')\
+.show()
+
+produtos.join(impostos, 'cat', how = 'right')\
+.sort('id')\
+.show()
+
+produtos.join(impostos, 'cat', how = 'outer')\
+.sort('id')\
+.show()
+
+empresas_join = empresas.join(estabelecimentos, 'cnpj_basico', how = 'inner')
+empresas_join.printSchema()
+
+freq = empresas_join\
+          .select('cnpj_basico', f.year('data_de_inicio_atividade').alias('data_de_inicio'))\
+          .where('data_de_inicio >= 2010')\
+          .groupBy('data_de_inicio')\
+          .agg(f.count('cnpj_basico').alias('frequencia'))\
+          .orderBy('data_de_inicio', ascending = True)
+
+freq.toPandas()
+
+freq.union(
+    freq.select(
+        f.lit('Total').alias('data_de_inicio'),
+        f.sum(freq.frequencia).alias('frequencia')
+    )
+).show()
+
+empresas.createOrReplaceTempView('empresasView')
+
+spark.sql("SELECT * FROM empresasView")\
+  .show(5)
+
+spark\
+  .sql('''
+  SELECT *
+  FROM empresasView
+  WHERE capital_social_da_empresa = 50
+  ''')\
+  .show(5)
+
+spark\
+  .sql('''
+  SELECT porte_da_empresa, MEAN(capital_social_da_empresa) AS MEDIA
+  FROM empresasView
+  GROUP BY porte_da_empresa
+  ''')\
+  .show(5)
+
+empresas_join.createOrReplaceTempView('empresasJoinView')
+
+freq = spark\
+    .sql("""
+        SELECT YEAR(data_de_inicio_atividade) AS data_de_inicio, COUNT(cnpj_basico) AS count
+            FROM empresasJoinView
+            WHERE YEAR(data_de_inicio_atividade) >= 2010
+            GROUP BY data_de_inicio
+            ORDER BY data_de_inicio
+    """)
+
+freq\
+    .show()
+
+freq.createOrReplaceTempView('freqView')
+
+#juntando dataframe um embaixo do outro usando sql no spark
+
+spark\
+  .sql('''
+  SELECT *
+  FROM freqView
+  UNION ALL
+  SELECT 'Total' AS data_de_inicio, SUM(count) AS co
+  FROM freqView
+  ''')\
+  .show(5)
+
+  #cria uma linha artificial ('Total') na coluna data_de_inicio
+
+empresas.write.csv(
+    path = '',
+    mode = 'overwrite',
+    sep = ';',
+    header = True
+)
+
+empresas2 = spark.read.csv(
+    '',
+    sep = ';',
+    inferSchema = True,
+    header = True
+)
+
+socios.write.csv(
+    path = '',
+    mode = 'overwrite',
+    sep = ';',
+    header = True
+)
+
+estabelecimentos.write.csv(
+    path = '',
+    mode = 'overwrite',
+    sep = ';',
+    header = True
+)
+
+empresas2.printSchema()
+
+empresas.write.parquet(
+    path = '',
+    mode = 'overwrite'
+)
+
+empresas_parquet = spark.read.parquet(
+    ''
+)
+
+empresas.coalesce(1).write.csv(
+    path = '',
+    mode = 'overwrite',
+    sep = ';',
+    header = True
+)
+
+empresas.write.parquet(
+    path = '',
+    mode = 'overwrite',
+    partitionBy = 'porte_da_empresa'
+)
+
+spark.stop()
