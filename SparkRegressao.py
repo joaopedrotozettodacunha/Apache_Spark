@@ -8,7 +8,7 @@ spark = SparkSession.builder\
   .getOrCreate()
 
 spark
-#vai rodar local, usando totods os nucleos da cpu (VM do google)
+#vai rodar local, usando todos os nucleos da cpu (VM do google)
 
 from google.colab import drive
 drive.mount('/content/drive')
