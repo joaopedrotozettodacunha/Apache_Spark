@@ -1,5 +1,3 @@
-!pip install pyspark
-
 from pyspark.sql import SparkSession
 
 spark = SparkSession.builder\
@@ -301,3 +299,131 @@ print("Dados de Teste")
 print("="*30)
 print("R²: %f" % evaluator.evaluate(previsoes_rfr_teste, {evaluator.metricName: "r2"}))
 print("RMSE: %f" % evaluator.evaluate(previsoes_rfr_teste, {evaluator.metricName: "rmse"}))
+
+from pyspark.ml.regression import DecisionTreeRegressor
+from pyspark.ml.tuning import ParamGridBuilder, CrossValidator
+from pyspark.ml.evaluation import RegressionEvaluator
+
+dtr = DecisionTreeRegressor()
+
+grid = ParamGridBuilder()\
+  .addGrid(dtr.maxDepth, [2, 5, 10])\
+  .addGrid(dtr.maxBins, [10, 32, 45])\
+  .build()
+
+#.addGrid(dtr.maxBins, [10, 32, 45])\ numero de intervalos para discretizar atributos continuos
+
+evaluator = RegressionEvaluator()
+
+dtr_cv = CrossValidator(
+    estimator = dtr, #qual modelo sera treinado
+    estimatorParamMaps = grid, #grade de hiperparametros
+    evaluator = evaluator,
+    numFolds = 3, #2 para treino, 1 para validacao
+    seed = 101
+)
+
+modelo_dtr_cv = dtr_cv.fit(treino)
+
+previsoes_dtr_cv_teste = modelo_dtr_cv.transform(teste)
+
+print('Decision Tree Regression')
+print("="*30)
+print("Sem Cross Validation")
+print("="*30)
+print("R²: %f" % evaluator.evaluate(previsoes_dtr_teste, {evaluator.metricName: "r2"}))
+print("RMSE: %f" % evaluator.evaluate(previsoes_dtr_teste, {evaluator.metricName: "rmse"}))
+print("")
+print("="*30)
+print("Com Cross Validation")
+print("="*30)
+print("R²: %f" % evaluator.evaluate(previsoes_dtr_cv_teste, {evaluator.metricName: "r2"}))
+print("RMSE: %f" % evaluator.evaluate(previsoes_dtr_cv_teste, {evaluator.metricName: "rmse"}))
+
+from pyspark.ml.regression import RandomForestRegressor
+
+rfr = RandomForestRegressor()
+
+grid = ParamGridBuilder()\
+  .addGrid(rfr.numTrees, [10, 20, 30])\
+  .addGrid(rfr.maxBins, [10, 32, 45])\
+  .addGrid(rfr.maxDepth, [5, 10])\
+  .build()
+
+evaluator = RegressionEvaluator()
+
+rfr_cv = CrossValidator(
+    estimator = rfr,
+    evaluator = evaluator,
+    estimatorParamMaps = grid,
+    numFolds = 3,
+    seed = 101
+)
+
+modelo_rfr_cv = rfr_cv.fit(treino)
+
+previsoes_rfr_cv_teste = modelo_rfr_cv.transform(teste)
+
+print('Random Forest Regression')
+print("="*30)
+print("Sem Cross Validation")
+print("="*30)
+print("R²: %f" % evaluator.evaluate(previsoes_rfr_teste, {evaluator.metricName: "r2"}))
+print("RMSE: %f" % evaluator.evaluate(previsoes_rfr_teste, {evaluator.metricName: "rmse"}))
+print("")
+print("="*30)
+print("Com Cross Validation")
+print("="*30)
+print("R²: %f" % evaluator.evaluate(previsoes_rfr_cv_teste, {evaluator.metricName: "r2"}))
+print("RMSE: %f" % evaluator.evaluate(previsoes_rfr_cv_teste, {evaluator.metricName: "rmse"}))
+
+x = [ 'bathrooms',
+    'bedrooms',
+    'floors',
+    'parkingSpaces',
+    'suites',
+    'unitFloor',
+    'unitsOnTheFloor',
+    'usableAreas',
+    'condo',
+    'iptu',
+    'Apartamento',
+    'Casa',
+    'Outros',
+    'Zona Central',
+    'Zona Norte',
+    'Zona Oeste',
+    'Zona Sul']
+
+novo_imovel = [{
+    'bathrooms': 2,
+    'bedrooms': 2,
+    'floors': 2,
+    'parkingSpaces': 1,
+    'suites': 1,
+    'unitFloor':0,
+    'unitsOnTheFloor':0,
+    'usableAreas':200,
+    'condo':200,
+    'iptu':0,
+    'Apartamento':0,
+    'Casa':1,
+    'Outros':0,
+    'Zona Central':0,
+    'Zona Norte':0,
+    'Zona Oeste':0,
+    'Zona Sul':1,
+        'label': 0
+} ]
+
+imovel = spark.createDataFrame(novo_imovel)
+
+assembler = VectorAssembler(inputCols = x, outputCol = 'features')
+
+vetorizado = assembler.transform(imovel)
+
+vetorizado = vetorizado.select('features', 'label').show()
+
+vetorizado.show()
+
+modelo_rfr_cv.transform(vetorizado).show()
